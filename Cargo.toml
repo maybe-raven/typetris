@@ -1,0 +1,11 @@
+[package]
+name = "typetris"
+version = "0.1.0"
+edition = "2024"
+description = "A Tetris and typing game hybrid."
+readme = "README.md"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+yew = { version="0.21", features=["csr"] }
