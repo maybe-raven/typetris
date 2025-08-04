@@ -1,6 +1,5 @@
+use gloo_console::log;
 use rand::{Rng, rng, seq::IndexedRandom};
-
-use super::Direction;
 
 const WORDS: &[&str] = include!("english.in");
 
@@ -27,14 +26,18 @@ impl Block {
         ret
     }
 
-    pub(super) fn move_horizontaly(&mut self, direction: Direction, width: usize) {
-        if !self.complete {
-            return;
+    #[inline]
+    pub(super) fn move_right(&mut self, width: usize) {
+        if self.complete {
+            self.x = self.max_y(width).min(self.x + 1);
         }
-        self.x = match direction {
-            Direction::Left => self.x.saturating_sub(1),
-            Direction::Right => self.max_y(width).max(self.x + 1),
-        };
+    }
+
+    #[inline]
+    pub(super) fn move_left(&mut self) {
+        if self.complete {
+            self.x = self.x.saturating_sub(1);
+        }
     }
 
     #[inline]
@@ -43,7 +46,7 @@ impl Block {
     }
 
     #[inline]
-    pub(super) fn check_text(&mut self, text: String) {
+    pub(super) fn check_text(&mut self, text: &str) {
         if self.text == text {
             self.complete = true;
         }

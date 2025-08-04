@@ -12,7 +12,8 @@ use web_sys::{
 };
 use yew::prelude::*;
 
-const BLOCK_FALL_SPEED: f64 = 1.0;
+const BLOCK_NORMAL_FALL_SPEED: f64 = 1.0;
+const BLOCK_COMPLETED_FALL_SPEED: f64 = 10.0;
 const SPAWN_DELAY: f64 = 4.0;
 const BOARD_WIDTH: usize = 10;
 const BOARD_HEIGHT: usize = 15;
@@ -34,6 +35,7 @@ pub(crate) struct Game {
     last_timestamp: f64,
     spawn_timer: f64,
     text: String,
+    index: usize,
 }
 
 impl Game {
@@ -51,22 +53,39 @@ impl Game {
             ret = true;
         }
 
-        for block in self.blocks.iter_mut() {
-            block.move_vertically(delta_time * BLOCK_FALL_SPEED);
+        for (index, block) in self.blocks.iter_mut().enumerate() {
+            let speed = if index < self.index {
+                BLOCK_COMPLETED_FALL_SPEED
+            } else {
+                BLOCK_NORMAL_FALL_SPEED
+            };
+            block.move_vertically(delta_time * speed);
         }
 
         ret
     }
 
     fn keydown(&mut self, event: KeyboardEvent) -> bool {
-        let key = event.key();
-        log!(key.as_str());
-        match key.as_str() {
-            "Enter" | "Tab" | " " => todo!("switch word"),
+        if self.blocks.len() <= self.index {
+            return false;
+        }
+
+        match event.key().as_str() {
+            "Enter" | "Tab" | " " => {
+                self.index += 1;
+                self.text.clear();
+            }
+            "ArrowLeft" => self.blocks[self.index].move_left(),
+            "h" if event.ctrl_key() => self.blocks[self.index].move_left(),
+            "ArrowRight" => self.blocks[self.index].move_right(BOARD_WIDTH),
+            "l" if event.ctrl_key() => self.blocks[self.index].move_right(BOARD_WIDTH),
             "Backspace" => {
                 self.text.pop();
             }
-            key if key.len() == 1 => self.text.push_str(key),
+            key if key.len() == 1 => {
+                self.text.push_str(key);
+                self.blocks[self.index].check_text(&self.text);
+            }
             _ => (),
         }
         false
@@ -96,6 +115,7 @@ impl Component for Game {
             last_timestamp: timestamp,
             spawn_timer: SPAWN_DELAY,
             text: String::new(),
+            index: 0,
         }
     }
 
@@ -120,7 +140,6 @@ impl Component for Game {
             let dpr = web_sys::window().unwrap().device_pixel_ratio();
             let canvas_height = rect.height() * dpr;
             let canvas_width = rect.width() * dpr;
-            log!(rect, dpr, canvas_width, canvas_height);
             canvas.set_height(canvas_height as _);
             canvas.set_width(canvas_width as _);
             (canvas_height, canvas_width)
@@ -137,8 +156,7 @@ impl Component for Game {
         context.set_text_baseline("middle");
         context.set_stroke_style_str("black");
 
-        let mut first = true;
-        for block in self.blocks.iter() {
+        for (index, block) in self.blocks.iter().enumerate() {
             let x = block.get_x() as f64 * cell_width;
             let y = block.get_y(BOARD_HEIGHT - 1) as f64 * cell_height;
             let width = block.width() as f64 * cell_width;
@@ -148,9 +166,8 @@ impl Component for Game {
             context.set_fill_style_str("blue");
             context.fill();
 
-            if first {
+            if index == self.index {
                 for (i, (a, b)) in self.text.chars().zip(block.text().chars()).enumerate() {
-                    first = false;
                     let x = x + i as f64 * cell_width;
                     let color = if a == b { "green" } else { "red" };
                     context.set_fill_style_str(color);
@@ -180,11 +197,4 @@ impl Component for Game {
             Msg::Keydown(e) => self.keydown(e),
         }
     }
-}
-
-#[allow(unused)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Direction {
-    Left,
-    Right,
 }
