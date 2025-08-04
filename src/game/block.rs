@@ -1,4 +1,3 @@
-use gloo_console::log;
 use rand::{Rng, rng, seq::IndexedRandom};
 
 const WORDS: &[&str] = include!("english.in");
@@ -41,8 +40,8 @@ impl Block {
     }
 
     #[inline]
-    pub(super) fn move_vertically(&mut self, dy: f64) {
-        self.y += dy;
+    pub(super) fn move_vertically(&mut self, dy: f64, max_y: f64) {
+        self.y = max_y.min(self.y + dy);
     }
 
     #[inline]
@@ -53,8 +52,8 @@ impl Block {
     }
 
     #[inline]
-    pub(super) fn get_y(&self, max_y: usize) -> usize {
-        max_y.min(self.y.floor() as usize)
+    pub(super) fn get_y(&self) -> usize {
+        self.y.floor() as usize
     }
 
     #[inline]

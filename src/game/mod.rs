@@ -53,13 +53,30 @@ impl Game {
             ret = true;
         }
 
-        for (index, block) in self.blocks.iter_mut().enumerate() {
-            let speed = if index < self.index {
+        for i in 0..self.blocks.len() {
+            let block = &self.blocks[i];
+            let x0 = block.get_x();
+            let x1 = x0 + block.width() - 1;
+            let max_y = self
+                .blocks
+                .iter()
+                .take(i)
+                .filter_map(|block| {
+                    let bx0 = block.get_x();
+                    let bx1 = bx0 + block.width() - 1;
+                    (!(bx1 < x0 || bx0 > x1)).then_some(block.get_y())
+                })
+                .min()
+                .unwrap_or(BOARD_HEIGHT)
+                - 1;
+            log!(block.text(), i, max_y);
+
+            let speed = if i < self.index {
                 BLOCK_COMPLETED_FALL_SPEED
             } else {
                 BLOCK_NORMAL_FALL_SPEED
             };
-            block.move_vertically(delta_time * speed);
+            self.blocks[i].move_vertically(delta_time * speed, max_y as f64);
         }
 
         ret
@@ -75,10 +92,10 @@ impl Game {
                 self.index += 1;
                 self.text.clear();
             }
-            "ArrowLeft" => self.blocks[self.index].move_left(),
-            "h" if event.ctrl_key() => self.blocks[self.index].move_left(),
-            "ArrowRight" => self.blocks[self.index].move_right(BOARD_WIDTH),
-            "l" if event.ctrl_key() => self.blocks[self.index].move_right(BOARD_WIDTH),
+            "ArrowLeft" => self.left(),
+            "h" if event.ctrl_key() => self.left(),
+            "ArrowRight" => self.right(),
+            "l" if event.ctrl_key() => self.right(),
             "Backspace" => {
                 self.text.pop();
             }
@@ -89,6 +106,30 @@ impl Game {
             _ => (),
         }
         false
+    }
+
+    fn left(&mut self) {
+        let block = &self.blocks[self.index];
+        let x = block.get_x();
+        let y = self.blocks[self.index].get_y();
+        for block in self.blocks.iter().take(self.index) {
+            if block.get_y() == y && block.get_x() + block.width() == x {
+                return;
+            }
+        }
+        self.blocks[self.index].move_left();
+    }
+
+    fn right(&mut self) {
+        let block = &self.blocks[self.index];
+        let x = block.get_x() + block.width();
+        let y = self.blocks[self.index].get_y();
+        for block in self.blocks.iter().take(self.index) {
+            if block.get_y() == y && block.get_x() == x {
+                return;
+            }
+        }
+        self.blocks[self.index].move_right(BOARD_WIDTH);
     }
 }
 
@@ -158,7 +199,7 @@ impl Component for Game {
 
         for (index, block) in self.blocks.iter().enumerate() {
             let x = block.get_x() as f64 * cell_width;
-            let y = block.get_y(BOARD_HEIGHT - 1) as f64 * cell_height;
+            let y = block.get_y() as f64 * cell_height;
             let width = block.width() as f64 * cell_width;
 
             context.begin_path();
