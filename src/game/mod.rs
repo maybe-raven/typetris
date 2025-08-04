@@ -1,12 +1,14 @@
 mod block;
 
 use block::Block;
+use gloo::events::EventListener;
+use gloo::utils::window;
 use gloo_console::log;
 use gloo_timers::callback::Interval;
 use web_sys::{
     CanvasRenderingContext2d, HtmlCanvasElement,
     js_sys::{self},
-    wasm_bindgen::JsCast,
+    wasm_bindgen::{JsCast, UnwrapThrowExt},
 };
 use yew::prelude::*;
 
@@ -15,9 +17,10 @@ const SPAWN_DELAY: f64 = 4.0;
 const BOARD_WIDTH: usize = 10;
 const BOARD_HEIGHT: usize = 15;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Msg {
     Tick,
+    Keydown(KeyboardEvent),
 }
 
 #[derive(Debug, Clone, Properties, PartialEq, Eq)]
@@ -25,10 +28,12 @@ pub(crate) struct Props {}
 
 pub(crate) struct Game {
     _tick_handle: Interval,
+    _listener: EventListener,
     canvas_node: NodeRef,
     blocks: Vec<Block>,
     last_timestamp: f64,
     spawn_timer: f64,
+    text: String,
 }
 
 impl Game {
@@ -52,6 +57,20 @@ impl Game {
 
         ret
     }
+
+    fn keydown(&mut self, event: KeyboardEvent) -> bool {
+        let key = event.key();
+        log!(key.as_str());
+        match key.as_str() {
+            "Enter" | "Tab" | " " => todo!("switch word"),
+            "Backspace" => {
+                self.text.pop();
+            }
+            key if key.len() == 1 => self.text.push_str(key),
+            _ => (),
+        }
+        false
+    }
 }
 
 impl Component for Game {
@@ -62,12 +81,21 @@ impl Component for Game {
         let link = ctx.link().clone();
         let _tick_handle = Interval::new(1_000 / 30, move || link.send_message(Msg::Tick));
         let timestamp = js_sys::Date::new_0().value_of();
+        let callback = ctx.link().callback(|e: KeyboardEvent| {
+            log!("keydown", &e);
+            Msg::Keydown(e)
+        });
+        let _listener = EventListener::new(&window(), "keydown", move |e| {
+            callback.emit(e.clone().dyn_into().unwrap_throw())
+        });
         Self {
             _tick_handle,
+            _listener,
             canvas_node: NodeRef::default(),
             blocks: Vec::new(),
             last_timestamp: timestamp,
             spawn_timer: SPAWN_DELAY,
+            text: String::new(),
         }
     }
 
@@ -79,6 +107,7 @@ impl Component for Game {
 
     fn rendered(&mut self, _ctx: &Context<Self>, first_render: bool) {
         let canvas: HtmlCanvasElement = self.canvas_node.cast().unwrap();
+        canvas.focus().unwrap();
         let context: CanvasRenderingContext2d = canvas
             .get_context("2d")
             .unwrap()
@@ -108,15 +137,26 @@ impl Component for Game {
         context.set_text_baseline("middle");
         context.set_stroke_style_str("black");
 
+        let mut first = true;
         for block in self.blocks.iter() {
             let x = block.get_x() as f64 * cell_width;
             let y = block.get_y(BOARD_HEIGHT - 1) as f64 * cell_height;
             let width = block.width() as f64 * cell_width;
-            // log!(x, y, width, cell_height);
+
             context.begin_path();
             context.rect(x, y, width, cell_height);
             context.set_fill_style_str("blue");
             context.fill();
+
+            if first {
+                for (i, (a, b)) in self.text.chars().zip(block.text().chars()).enumerate() {
+                    first = false;
+                    let x = x + i as f64 * cell_width;
+                    let color = if a == b { "green" } else { "red" };
+                    context.set_fill_style_str(color);
+                    context.fill_rect(x, y, cell_width, cell_height);
+                }
+            }
 
             for i in 1..block.width() {
                 let x = i as f64 * cell_width + x;
@@ -126,7 +166,7 @@ impl Component for Game {
             context.stroke();
 
             context.set_fill_style_str("black");
-            for (i, char) in block.chars().enumerate() {
+            for (i, char) in (0..block.text().len()).map(|i| (i, &block.text()[i..i + 1])) {
                 let x = x + i as f64 * cell_width + cell_width / 2.0;
                 let y = y + cell_height / 2.0;
                 context.fill_text(char, x, y).unwrap();
@@ -137,6 +177,7 @@ impl Component for Game {
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::Tick => self.tick(),
+            Msg::Keydown(e) => self.keydown(e),
         }
     }
 }

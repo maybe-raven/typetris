@@ -1,5 +1,3 @@
-use std::iter::FusedIterator;
-
 use rand::{Rng, rng, seq::IndexedRandom};
 
 use super::Direction;
@@ -72,8 +70,7 @@ impl Block {
     }
 
     #[inline]
-    pub(super) fn chars(&self) -> impl ExactSizeIterator<Item = &'static str> + FusedIterator {
-        assert!(self.text.is_ascii());
-        (0..self.text.len()).map(|i| &self.text[i..i + 1])
+    pub(super) fn text(&self) -> &'static str {
+        self.text
     }
 }
