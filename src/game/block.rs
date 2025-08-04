@@ -40,8 +40,14 @@ impl Block {
     }
 
     #[inline]
-    pub(super) fn move_vertically(&mut self, dy: f64, max_y: f64) {
-        self.y = max_y.min(self.y + dy);
+    pub(super) fn move_vertically(&mut self, dy: f64, max_y: f64) -> bool {
+        self.y += dy;
+        if max_y < self.y {
+            self.y = max_y;
+            true
+        } else {
+            false
+        }
     }
 
     #[inline]

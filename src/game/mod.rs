@@ -1,5 +1,7 @@
 mod block;
 
+use std::cmp::Ordering;
+
 use block::Block;
 use gloo::events::EventListener;
 use gloo::utils::window;
@@ -12,10 +14,10 @@ use web_sys::{
 };
 use yew::prelude::*;
 
-const BLOCK_NORMAL_FALL_SPEED: f64 = 1.0;
+const BLOCK_NORMAL_FALL_SPEED: f64 = 2.0;
 const BLOCK_COMPLETED_FALL_SPEED: f64 = 10.0;
-const SPAWN_DELAY: f64 = 4.0;
-const BOARD_WIDTH: usize = 10;
+const SPAWN_DELAY: f64 = 3.0;
+const BOARD_WIDTH: usize = 12;
 const BOARD_HEIGHT: usize = 15;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,16 +37,22 @@ pub(crate) struct Game {
     last_timestamp: f64,
     spawn_timer: f64,
     text: String,
-    index: usize,
+    focus_index: usize,
+    moving_index: usize,
+    game_over: bool,
 }
 
 impl Game {
     fn tick(&mut self) -> bool {
+        if self.game_over {
+            return false;
+        }
+
         let timestamp = js_sys::Date::new_0().value_of();
         let delta_time = (timestamp - self.last_timestamp) / 1_000.0;
         self.last_timestamp = timestamp;
 
-        let mut ret = !self.blocks.is_empty();
+        let mut ret = self.moving_index < self.blocks.len();
 
         self.spawn_timer -= delta_time;
         if self.spawn_timer <= 0.0 {
@@ -53,43 +61,112 @@ impl Game {
             ret = true;
         }
 
-        for i in 0..self.blocks.len() {
-            let block = &self.blocks[i];
+        fn find_max_y(blocks: &[Block], i: usize) -> usize {
+            let block = &blocks[i];
+            let y = block.get_y();
             let x0 = block.get_x();
             let x1 = x0 + block.width() - 1;
-            let max_y = self
-                .blocks
+            blocks
                 .iter()
-                .take(i)
-                .filter_map(|block| {
+                .enumerate()
+                .filter_map(|(j, block)| {
                     let bx0 = block.get_x();
                     let bx1 = bx0 + block.width() - 1;
-                    (!(bx1 < x0 || bx0 > x1)).then_some(block.get_y())
+                    (j != i && block.get_y() > y && !(bx1 < x0 || bx0 > x1))
+                        .then_some(block.get_y())
                 })
                 .min()
                 .unwrap_or(BOARD_HEIGHT)
-                - 1;
-            log!(block.text(), i, max_y);
+                - 1
+        }
 
-            let speed = if i < self.index {
+        let mut newly_rested = false;
+        for i in self.moving_index..self.blocks.len() {
+            let max_y = find_max_y(&self.blocks, i);
+            let speed = if i < self.focus_index {
                 BLOCK_COMPLETED_FALL_SPEED
             } else {
                 BLOCK_NORMAL_FALL_SPEED
             };
-            self.blocks[i].move_vertically(delta_time * speed, max_y as f64);
+            let rested = self.blocks[i].move_vertically(delta_time * speed, max_y as f64);
+
+            if rested {
+                newly_rested = true;
+                self.moving_index = i + 1;
+                if self.moving_index > self.focus_index {
+                    self.focus_index = self.moving_index;
+                    self.text.clear();
+                }
+                if max_y == 0 {
+                    self.game_over = true;
+                }
+            }
+        }
+
+        if newly_rested {
+            let mut rested: Vec<(usize, &Block)> = self.blocks[..self.moving_index]
+                .iter()
+                .enumerate()
+                .collect();
+            rested.sort_by(|a, b| match a.1.get_y().cmp(&b.1.get_y()) {
+                Ordering::Equal => a.1.get_x().cmp(&b.1.get_x()),
+                o => o,
+            });
+
+            let mut removals = Vec::new();
+            for chunk in rested.chunk_by(|a, b| a.1.get_y() == b.1.get_y()) {
+                let mut first = true;
+                let mut last = 0;
+                for window in chunk.windows(2) {
+                    let &[(_, a), (_, b)] = window else {
+                        unreachable!();
+                    };
+                    let ax0 = a.get_x();
+                    let ax1 = ax0 + a.width();
+                    let bx0 = b.get_x();
+                    let bx1 = bx0 + b.width();
+
+                    if first {
+                        if ax0 != 0 {
+                            continue;
+                        }
+                        first = false;
+                    }
+                    if ax1 != bx0 {
+                        continue;
+                    }
+                    last = bx1;
+                }
+                if last != BOARD_WIDTH {
+                    continue;
+                }
+
+                removals.extend(chunk.iter().map(|(i, _)| *i));
+            }
+
+            self.focus_index -= removals.len();
+            self.moving_index -= removals.len();
+            removals.sort();
+            for i in removals.into_iter().rev() {
+                self.blocks.remove(i);
+            }
+            for i in 0..self.moving_index {
+                let max_y = find_max_y(&self.blocks, i);
+                self.blocks[i].move_vertically(BOARD_HEIGHT as _, max_y as _);
+            }
         }
 
         ret
     }
 
     fn keydown(&mut self, event: KeyboardEvent) -> bool {
-        if self.blocks.len() <= self.index {
+        if self.blocks.len() <= self.focus_index {
             return false;
         }
 
         match event.key().as_str() {
             "Enter" | "Tab" | " " => {
-                self.index += 1;
+                self.focus_index += 1;
                 self.text.clear();
             }
             "ArrowLeft" => self.left(),
@@ -101,7 +178,7 @@ impl Game {
             }
             key if key.len() == 1 => {
                 self.text.push_str(key);
-                self.blocks[self.index].check_text(&self.text);
+                self.blocks[self.focus_index].check_text(&self.text);
             }
             _ => (),
         }
@@ -109,27 +186,27 @@ impl Game {
     }
 
     fn left(&mut self) {
-        let block = &self.blocks[self.index];
+        let block = &self.blocks[self.focus_index];
         let x = block.get_x();
-        let y = self.blocks[self.index].get_y();
-        for block in self.blocks.iter().take(self.index) {
+        let y = self.blocks[self.focus_index].get_y();
+        for block in self.blocks.iter().take(self.focus_index) {
             if block.get_y() == y && block.get_x() + block.width() == x {
                 return;
             }
         }
-        self.blocks[self.index].move_left();
+        self.blocks[self.focus_index].move_left();
     }
 
     fn right(&mut self) {
-        let block = &self.blocks[self.index];
+        let block = &self.blocks[self.focus_index];
         let x = block.get_x() + block.width();
-        let y = self.blocks[self.index].get_y();
-        for block in self.blocks.iter().take(self.index) {
+        let y = self.blocks[self.focus_index].get_y();
+        for block in self.blocks.iter().take(self.focus_index) {
             if block.get_y() == y && block.get_x() == x {
                 return;
             }
         }
-        self.blocks[self.index].move_right(BOARD_WIDTH);
+        self.blocks[self.focus_index].move_right(BOARD_WIDTH);
     }
 }
 
@@ -156,13 +233,20 @@ impl Component for Game {
             last_timestamp: timestamp,
             spawn_timer: SPAWN_DELAY,
             text: String::new(),
-            index: 0,
+            focus_index: 0,
+            moving_index: 0,
+            game_over: false,
         }
     }
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
-            <canvas class="h-screen aspect-[2/3] bg-fore" ref={self.canvas_node.clone()} />
+            <>
+                <canvas class="h-screen aspect-[12/15] bg-fore" ref={self.canvas_node.clone()} />
+                if self.game_over {
+                    <h1 class="text-red text-9xl font-bold">{"Game Over"}</h1>
+                }
+            </>
         }
     }
 
@@ -207,7 +291,7 @@ impl Component for Game {
             context.set_fill_style_str("blue");
             context.fill();
 
-            if index == self.index {
+            if index == self.focus_index {
                 for (i, (a, b)) in self.text.chars().zip(block.text().chars()).enumerate() {
                     let x = x + i as f64 * cell_width;
                     let color = if a == b { "green" } else { "red" };
