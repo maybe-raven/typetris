@@ -1,2 +1,15 @@
 @config "./tailwind.config.js";
 @import "tailwindcss";
+@theme {
+  --color-primary: #7c3aed;
+  --color-accent: #6517EA;
+  --color-dark1: #221736;
+  --color-dark2: #3B2D53;
+  --color-dark3: #55476B;
+  --color-light1: #FFFFFF;
+  --color-light2: #F7F4FA;
+  --color-light3: #E3DEED;
+  --color-success: #0DBA5C;
+  --color-warning: #ff7300;
+  --color-error: #F53733;
+}

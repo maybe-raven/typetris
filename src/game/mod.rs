@@ -40,6 +40,9 @@ pub(crate) struct Game {
     focus_index: usize,
     moving_index: usize,
     game_over: bool,
+    bg_color: String,
+    primary_color: String,
+    secondary_color: String,
 }
 
 impl Game {
@@ -236,13 +239,16 @@ impl Component for Game {
             focus_index: 0,
             moving_index: 0,
             game_over: false,
+            bg_color: "black".into(),
+            primary_color: "purple".into(),
+            secondary_color: "gray".into(),
         }
     }
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
             <>
-                <canvas class="h-screen aspect-[12/15] bg-fore" ref={self.canvas_node.clone()} />
+                <canvas class="h-screen aspect-[12/15]" ref={self.canvas_node.clone()} />
                 if self.game_over {
                     <h1 class="text-red text-9xl font-bold">{"Game Over"}</h1>
                 }
@@ -262,7 +268,12 @@ impl Component for Game {
 
         let (canvas_height, canvas_width) = if first_render {
             let rect = canvas.get_bounding_client_rect();
-            let dpr = web_sys::window().unwrap().device_pixel_ratio();
+            let window = web_sys::window().unwrap();
+            let style = window.get_computed_style(&canvas).unwrap().unwrap();
+            self.bg_color = style.get_property_value("--color-fore").unwrap();
+            self.primary_color = style.get_property_value("--color-primary").unwrap();
+            self.secondary_color = style.get_property_value("--color-secondary").unwrap();
+            let dpr = window.device_pixel_ratio();
             let canvas_height = rect.height() * dpr;
             let canvas_width = rect.width() * dpr;
             canvas.set_height(canvas_height as _);
@@ -275,7 +286,8 @@ impl Component for Game {
         let cell_width = canvas_width / BOARD_WIDTH as f64;
         let cell_height = canvas_height / BOARD_HEIGHT as f64;
 
-        context.clear_rect(0.0, 0.0, canvas_width, canvas_height);
+        context.set_fill_style_str(&self.bg_color);
+        context.fill_rect(0.0, 0.0, canvas_width, canvas_height);
         context.set_font(format!("normal {:.0}px system-ui", cell_width * 0.7).as_str());
         context.set_text_align("center");
         context.set_text_baseline("middle");
@@ -288,7 +300,11 @@ impl Component for Game {
 
             context.begin_path();
             context.rect(x, y, width, cell_height);
-            context.set_fill_style_str("blue");
+            if index < self.moving_index {
+                context.set_fill_style_str(&self.secondary_color);
+            } else {
+                context.set_fill_style_str(&self.primary_color);
+            }
             context.fill();
 
             if index == self.focus_index {
