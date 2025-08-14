@@ -6,12 +6,21 @@ description = "A Tetris and typing game hybrid."
 readme = "README.md"
 license = "MIT"
 
+[lib]
+name = "typetris"
+path = "src/lib.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
+getset = "0.1.6"
 gloo = "0.11.0"
 gloo-console = "0.3.0"
 gloo-timers = "0.3.0"
 rand = "0.9.2"
 web-sys = { version = "0.3.77", features = ["CanvasRenderingContext2d", "CssStyleDeclaration", "DomRect", "Element", "HtmlCanvasElement", "Window"] }
 yew = { version="0.21", features=["csr"] }
+
+[dev-dependencies]
+quickcheck = "1.0.3"
+quickcheck_macros = "1.1.0"
