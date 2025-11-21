@@ -50,9 +50,13 @@ pub struct Board {
 
 impl Board {
     #[inline]
-    pub fn new(width: u8, height: u8) -> Self {
+    pub fn new(width: u8, height: u8, starts_with_one: bool) -> Self {
         Self {
-            blocks: Vec::new(),
+            blocks: if starts_with_one {
+                vec![Block::new(width)]
+            } else {
+                vec![]
+            },
             width,
             height,
         }
@@ -135,10 +139,11 @@ impl Board {
         }
     }
 
-    pub(super) fn fall_tick(&mut self) -> Option<Msg> {
+    pub(super) fn fall_tick(&mut self, include_interactable: bool) -> Option<Msg> {
         let mut newly_settled = false;
         for i in 0..self.blocks.len() {
-            if self.blocks[i].is_settled() {
+            let block = &self.blocks[i];
+            if block.is_settled() || (!include_interactable && block.is_interactable()) {
                 continue;
             }
             let max_y = self.find_max_y(i);
@@ -425,18 +430,23 @@ mod test {
         use super::*;
 
         #[inline]
-        fn f(b: &mut Board) -> bool {
-            b.fall_tick().is_some()
+        fn drift(b: &mut Board) -> bool {
+            b.fall_tick(true).is_some()
+        }
+
+        #[inline]
+        fn fall(b: &mut Board) -> bool {
+            b.fall_tick(false).is_some()
         }
 
         #[test]
         fn empty() {
-            assert_unchanged(&empty_board(), f);
+            assert_unchanged(&empty_board(), drift);
         }
 
         #[test]
         fn all_settled() {
-            assert_unchanged(&Board::populated(), f);
+            assert_unchanged(&Board::populated(), drift);
         }
 
         #[test]
@@ -445,15 +455,16 @@ mod test {
             let i = board.blocks.len();
             board.blocks.push(block(2, 20, "Bayanetta"));
 
-            assert!(board.fall_tick().is_none());
+            assert_unchanged(&board, fall);
+            assert!(board.fall_tick(true).is_none());
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 21 });
             assert_eq!(board.get_focused_index(), Some(i));
 
-            assert_eq!(board.fall_tick(), Some(Msg::BlocksSettled));
+            assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.get_focused_index(), None);
 
-            assert_unchanged(&board, f);
+            assert_unchanged(&board, drift);
         }
 
         #[test]
@@ -463,17 +474,17 @@ mod test {
             board.blocks.push(block(2, 20, "Bayanetta"));
             board.blocks.push(block(7, 2, "Hornet"));
 
-            assert!(board.fall_tick().is_none());
+            assert!(board.fall_tick(true).is_none());
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 21 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 3 });
             assert_eq!(board.get_focused_index(), Some(i));
 
-            assert_eq!(board.fall_tick(), Some(Msg::BlocksSettled));
+            assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 4 });
             assert_eq!(board.get_focused_index(), Some(i + 1));
 
-            assert!(board.fall_tick().is_none());
+            assert!(board.fall_tick(true).is_none());
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 5 });
             assert_eq!(board.get_focused_index(), Some(i + 1));
@@ -489,12 +500,12 @@ mod test {
             );
             let i = board.blocks.len();
             board.blocks.push(block(2, 0, "Bayanetta"));
-            assert_eq!(board.fall_tick(), Some(Msg::BlocksSettled));
+            assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 1 });
 
             let i = board.blocks.len();
             board.blocks.push(block(2, 0, "Bayanetta"));
-            assert_eq!(board.fall_tick(), Some(Msg::GameOver));
+            assert_eq!(board.fall_tick(true), Some(Msg::GameOver));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 0 });
         }
     }

@@ -85,6 +85,11 @@ impl Block {
     }
 
     #[inline]
+    pub fn is_falling(&self) -> bool {
+        matches!(self.state, State::Falling)
+    }
+
+    #[inline]
     pub fn is_movable(&self) -> bool {
         self.is_interactable() && self.is_correct()
     }

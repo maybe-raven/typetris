@@ -79,7 +79,7 @@ impl Component for Game {
         Self {
             _tick_handle,
             _listener,
-            state: GameState::new(12, 16, 800.0, 4_000.0),
+            state: GameState::new(12, 16, true, 100.0, 4_000.0, 8),
             canvas_node: NodeRef::default(),
             last_timestamp: timestamp,
             swatch: Swatch::new(),

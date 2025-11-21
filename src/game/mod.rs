@@ -32,10 +32,17 @@ pub struct Game {
 
 impl Game {
     #[inline]
-    pub fn new(width: u8, height: u8, fall_interval: f64, spawn_interval: f64) -> Self {
+    pub fn new(
+        width: u8,
+        height: u8,
+        starts_with_one: bool,
+        fall_interval: f64,
+        spawn_interval: f64,
+        drift_interval: u8,
+    ) -> Self {
         Self {
-            board: Board::new(width, height),
-            timer: Timer::new(fall_interval, spawn_interval),
+            board: Board::new(width, height, starts_with_one),
+            timer: Timer::new(fall_interval, spawn_interval, drift_interval),
             score: 0,
             game_over: false,
         }
@@ -64,7 +71,7 @@ impl Game {
         let mut ret = false;
         if timer_msg.should_fall() {
             use board::Msg as M;
-            match self.board.fall_tick() {
+            match self.board.fall_tick(timer_msg.should_drift()) {
                 Some(M::GameOver) => self.game_over = true,
                 Some(M::BlocksSettled) => {
                     let cleared = self.board.clear_completed();
@@ -136,7 +143,14 @@ mod test {
 
     #[inline]
     fn fall_until_settled(game: &mut Game) {
-        while !matches!(game.board.fall_tick(), Some(board::Msg::BlocksSettled)) {}
+        while !matches!(game.board.fall_tick(true), Some(board::Msg::BlocksSettled)) {}
+    }
+
+    #[inline]
+    fn repeat_event(game: &mut Game, event: Event, n: usize) {
+        for _ in 0..n {
+            game.handle_event(event);
+        }
     }
 
     mod typing {
@@ -154,8 +168,7 @@ mod test {
 
         #[test]
         fn settled_unchanged() {
-            let mut game = Game::new(8, 4, 1.0, 4.0);
-            game.board.spawn_block();
+            let mut game = Game::new(8, 4, true, 1.0, 4.0, 5);
             fall_until_settled(&mut game);
             assert_unchanged(&game, |g| !g.add_char('a'));
             assert_unchanged(&game, |g| !g.delete_char());
@@ -163,14 +176,14 @@ mod test {
 
         #[test]
         fn empty_unchanged() {
-            let game = Game::new(8, 4, 1.0, 4.0);
+            let game = Game::new(8, 4, false, 1.0, 4.0, 5);
             assert_unchanged(&game, |g| !g.add_char('a'));
             assert_unchanged(&game, |g| !g.delete_char());
         }
 
         #[test]
         fn complex() {
-            let mut game = Game::new(8, 8, 1.0, 4.0);
+            let mut game = Game::new(8, 8, false, 1.0, 4.0, 5);
             game.board.push_block(Block::with_text_x("one", 1));
 
             // one block at the top
@@ -178,9 +191,9 @@ mod test {
             handle_and_assert(&mut game, Event::Type('b'), "ab");
             handle_and_assert(&mut game, Event::Delete, "a");
 
-            game.board.fall_tick();
-            game.board.fall_tick();
-            game.board.fall_tick();
+            game.board.fall_tick(true);
+            game.board.fall_tick(true);
+            game.board.fall_tick(true);
             game.board.push_block(Block::with_text_x("two", 4));
 
             // one block in the middle (focus), one block at the top
@@ -208,7 +221,7 @@ mod test {
 
     #[test]
     fn t0() {
-        let mut game = Game::new(16, 32, 1.0, 6.0);
+        let mut game = Game::new(16, 32, false, 1.0, 6.0, 1);
         game.board = Board::populated();
         game.board.push_block(Block::with_text_x("rusty", 2));
 
@@ -265,9 +278,8 @@ mod test {
     fn t1() {
         // The longest word in the current dictionary is 8 letters long, so a 10-wide board means
         // one block won't fill a row by itself.
-        let mut game = Game::new(10, 4, 1.0, 2.0);
+        let mut game = Game::new(10, 4, true, 0.25, 2.0, 4);
         use Event as E;
-        assert!(game.handle_event(E::Tick(2.1)));
 
         for _ in 0..4 {
             let text = *game.board.get_focused().unwrap().assigned_text();
@@ -287,7 +299,7 @@ mod test {
 
     #[test]
     fn t2() {
-        let mut game = Game::new(4, 4, 1.0, 4.0);
+        let mut game = Game::new(4, 4, false, 1.0, 4.0, 4);
         use Event as E;
 
         game.board.push_block(Block::with_text_x("an", 0));
@@ -304,5 +316,24 @@ mod test {
         assert_eq!(game.board.blocks().len(), 1);
         assert_eq!(game.score, 1);
         assert!(game.board.get_focused().is_some());
+    }
+
+    #[test]
+    fn free_fall() {
+        let mut game = Game::new(12, 16, true, 0.2, 2.0, 5);
+        use Event as E;
+
+        game.handle_event(E::Tick(0.25));
+        repeat_event(&mut game, E::Tick(0.2), 4);
+        assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 1));
+
+        assert!(game.handle_event(E::Next));
+        repeat_event(&mut game, E::Tick(0.2), 14);
+        assert!(
+            dbg!(game.board.blocks().first()).is_some_and(|b| b.is_settled() && b.position.y == 15)
+        );
+        assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 1));
+        game.handle_event(E::Tick(0.2));
+        assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 2));
     }
 }
