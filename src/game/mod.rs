@@ -1,5 +1,6 @@
 pub mod block;
 pub mod board;
+pub mod settings;
 mod timer;
 
 use std::collections::BTreeSet;
@@ -7,6 +8,7 @@ use std::collections::BTreeSet;
 use block::Block;
 use board::Board;
 use getset::{CopyGetters, Getters};
+use settings::Settings;
 use timer::Timer;
 
 #[derive(Debug, Clone, Copy)]
@@ -30,19 +32,22 @@ pub struct Game {
     game_over: bool,
 }
 
+impl Default for Game {
+    fn default() -> Self {
+        Self::new(Settings::default())
+    }
+}
+
 impl Game {
     #[inline]
-    pub fn new(
-        width: u8,
-        height: u8,
-        starts_with_one: bool,
-        fall_interval: f64,
-        spawn_interval: f64,
-        drift_interval: u8,
-    ) -> Self {
+    pub fn new(settings: Settings) -> Self {
         Self {
-            board: Board::new(width, height, starts_with_one),
-            timer: Timer::new(fall_interval, spawn_interval, drift_interval),
+            board: Board::new(settings.width, settings.height, settings.starts_with_one),
+            timer: Timer::new(
+                settings.fall_interval,
+                settings.spawn_interval,
+                settings.drift_interval,
+            ),
             score: 0,
             game_over: false,
         }
@@ -168,7 +173,7 @@ mod test {
 
         #[test]
         fn settled_unchanged() {
-            let mut game = Game::new(8, 4, true, 1.0, 4.0, 5);
+            let mut game = Game::default();
             fall_until_settled(&mut game);
             assert_unchanged(&game, |g| !g.add_char('a'));
             assert_unchanged(&game, |g| !g.delete_char());
@@ -176,14 +181,14 @@ mod test {
 
         #[test]
         fn empty_unchanged() {
-            let game = Game::new(8, 4, false, 1.0, 4.0, 5);
+            let game = Game::new(Settings::default().with_starts_with_one(false));
             assert_unchanged(&game, |g| !g.add_char('a'));
             assert_unchanged(&game, |g| !g.delete_char());
         }
 
         #[test]
         fn complex() {
-            let mut game = Game::new(8, 8, false, 1.0, 4.0, 5);
+            let mut game = Game::new(Settings::default().with_starts_with_one(false));
             game.board.push_block(Block::with_text_x("one", 1));
 
             // one block at the top
@@ -221,7 +226,11 @@ mod test {
 
     #[test]
     fn t0() {
-        let mut game = Game::new(16, 32, false, 1.0, 6.0, 1);
+        let settings = Settings::default()
+            .with_spawn_interval(6.0)
+            .with_fall_interval(1.0)
+            .with_drift_interval(1);
+        let mut game = Game::new(settings);
         game.board = Board::populated();
         game.board.push_block(Block::with_text_x("rusty", 2));
 
@@ -278,7 +287,14 @@ mod test {
     fn t1() {
         // The longest word in the current dictionary is 8 letters long, so a 10-wide board means
         // one block won't fill a row by itself.
-        let mut game = Game::new(10, 4, true, 0.25, 2.0, 4);
+        let settings = Settings::default()
+            .with_starts_with_one(true)
+            .with_width(10)
+            .with_height(4)
+            .with_spawn_interval(2.0)
+            .with_fall_interval(0.25)
+            .with_drift_interval(4);
+        let mut game = Game::new(settings);
         use Event as E;
 
         for _ in 0..4 {
@@ -299,7 +315,14 @@ mod test {
 
     #[test]
     fn t2() {
-        let mut game = Game::new(4, 4, false, 1.0, 4.0, 4);
+        let settings = Settings::default()
+            .with_starts_with_one(false)
+            .with_width(4)
+            .with_height(4)
+            .with_spawn_interval(4.0)
+            .with_fall_interval(1.0)
+            .with_drift_interval(4);
+        let mut game = Game::new(settings);
         use Event as E;
 
         game.board.push_block(Block::with_text_x("an", 0));
@@ -320,7 +343,12 @@ mod test {
 
     #[test]
     fn free_fall() {
-        let mut game = Game::new(12, 16, true, 0.2, 2.0, 5);
+        let settings = Settings::default()
+            .with_starts_with_one(true)
+            .with_spawn_interval(2.0)
+            .with_fall_interval(0.2)
+            .with_drift_interval(5);
+        let mut game = Game::new(settings);
         use Event as E;
 
         game.handle_event(E::Tick(0.25));
