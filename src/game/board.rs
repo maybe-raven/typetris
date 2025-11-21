@@ -147,14 +147,15 @@ impl Board {
                 continue;
             }
             let max_y = self.find_max_y(i);
-            if max_y == 0 {
-                return Some(Msg::GameOver);
-            }
             let block = &mut self.blocks[i];
-            block.position.y += 1;
             if block.position.y == max_y {
                 block.state = BlockState::Settled;
                 newly_settled = true;
+                if max_y == 0 {
+                    return Some(Msg::GameOver);
+                }
+            } else {
+                block.position.y += 1;
             }
         }
         newly_settled.then_some(Msg::BlocksSettled)
@@ -460,6 +461,7 @@ mod test {
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 21 });
             assert_eq!(board.get_focused_index(), Some(i));
 
+            assert!(board.fall_tick(true).is_none());
             assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.get_focused_index(), None);
@@ -479,12 +481,12 @@ mod test {
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 3 });
             assert_eq!(board.get_focused_index(), Some(i));
 
-            assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
+            assert!(board.fall_tick(true).is_none());
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 4 });
-            assert_eq!(board.get_focused_index(), Some(i + 1));
+            assert_eq!(board.get_focused_index(), Some(i));
 
-            assert!(board.fall_tick(true).is_none());
+            assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 5 });
             assert_eq!(board.get_focused_index(), Some(i + 1));
@@ -500,6 +502,8 @@ mod test {
             );
             let i = board.blocks.len();
             board.blocks.push(block(2, 0, "Bayanetta"));
+            assert!(board.fall_tick(true).is_none());
+            assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 1 });
             assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 1 });
 
@@ -507,6 +511,15 @@ mod test {
             board.blocks.push(block(2, 0, "Bayanetta"));
             assert_eq!(board.fall_tick(true), Some(Msg::GameOver));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 0 });
+        }
+
+        #[test]
+        fn settle_bottom() {
+            let mut board = Board::new(4, 4, true);
+            assert!(board.fall_tick(true).is_none());
+            assert!(board.fall_tick(true).is_none());
+            assert!(board.fall_tick(true).is_none());
+            assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
         }
     }
 

@@ -268,7 +268,7 @@ mod test {
         assert!(game.handle_event(Event::Right));
         assert!(game.handle_event(Event::Right));
 
-        for _ in 0..19 {
+        for _ in 0..20 {
             assert!(game.handle_event(Event::Tick(1.0)));
         }
 
@@ -335,6 +335,7 @@ mod test {
         assert!(game.handle_event(E::Tick(1.0)));
         // new block spawns here after 4.1 time unit.
         assert!(game.handle_event(E::Tick(1.0)));
+        assert!(game.handle_event(E::Tick(1.0)));
         // blocks settle and clear
         assert_eq!(game.board.blocks().len(), 1);
         assert_eq!(game.score, 1);
@@ -357,11 +358,112 @@ mod test {
 
         assert!(game.handle_event(E::Next));
         repeat_event(&mut game, E::Tick(0.2), 14);
-        assert!(
-            dbg!(game.board.blocks().first()).is_some_and(|b| b.is_settled() && b.position.y == 15)
-        );
+        assert!(dbg!(game.board.blocks().first()).is_some_and(|b| b.position.y == 15));
         assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 1));
         game.handle_event(E::Tick(0.2));
         assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 2));
+        assert!(
+            dbg!(game.board.blocks().first()).is_some_and(|b| b.is_settled() && b.position.y == 15)
+        );
+    }
+
+    #[test]
+    fn skim_left() {
+        let settings = Settings::default()
+            .with_starts_with_one(false)
+            .with_width(8)
+            .with_height(8)
+            .with_fall_interval(0.2)
+            .with_drift_interval(1);
+        let mut game = Game::new(settings);
+        for y in 4..7 {
+            game.board.push_block(Block::new_settled("why", 0, y));
+        }
+        game.board.push_block(Block::new_interactable("me", 3, 3));
+        assert!(game.handle_event(Event::Type('m')));
+        assert!(game.handle_event(Event::Type('e')));
+        assert!(game.handle_event(Event::Left));
+        assert!(game.handle_event(Event::Right));
+        assert!(game.handle_event(Event::Tick(0.25)));
+        assert!(!game.handle_event(Event::Left));
+        assert!(game.handle_event(Event::Right));
+        assert!(game.handle_event(Event::Left));
+    }
+
+    #[test]
+    fn skim_right() {
+        let settings = Settings::default()
+            .with_starts_with_one(false)
+            .with_width(8)
+            .with_height(8)
+            .with_fall_interval(0.2)
+            .with_drift_interval(1);
+        let mut game = Game::new(settings);
+        for y in 4..7 {
+            game.board.push_block(Block::new_settled("why", 5, y));
+        }
+        game.board.push_block(Block::new_interactable("me", 3, 3));
+        assert!(game.handle_event(Event::Type('m')));
+        assert!(game.handle_event(Event::Type('e')));
+        assert!(game.handle_event(Event::Right));
+        assert!(game.handle_event(Event::Left));
+        assert!(game.handle_event(Event::Tick(0.25)));
+        assert!(!game.handle_event(Event::Right));
+        assert!(game.handle_event(Event::Left));
+        assert!(game.handle_event(Event::Right));
+    }
+
+    #[test]
+    fn skim_settle() {
+        let settings = Settings::default()
+            .with_starts_with_one(false)
+            .with_width(8)
+            .with_height(8)
+            .with_fall_interval(0.2)
+            .with_drift_interval(3);
+        let mut game = Game::new(settings);
+        for y in 4..7 {
+            game.board.push_block(Block::new_settled("Cotton", 0, y));
+        }
+        game.board.push_block(Block::new_interactable("me", 6, 3));
+        assert!(game.handle_event(Event::Type('m')));
+        assert!(game.handle_event(Event::Type('e')));
+        assert!(game.handle_event(Event::Left));
+        game.handle_event(Event::Tick(0.25));
+        assert!(game.handle_event(Event::Left));
+        game.handle_event(Event::Tick(0.2));
+        assert!(game.handle_event(Event::Left));
+        game.handle_event(Event::Tick(0.2));
+        assert!(game.board.get_focused().is_none());
+    }
+
+    #[test]
+    fn full() {
+        let settings = Settings::default()
+            .with_starts_with_one(false)
+            .with_width(8)
+            .with_height(8)
+            .with_fall_interval(1.0)
+            .with_drift_interval(1);
+        let mut game = Game::new(settings);
+        for y in 1..7 {
+            game.board.push_block(Block::new_settled("Rennoir", 0, y));
+        }
+        game.board
+            .push_block(Block::new_interactable("Aline", 0, 0));
+        assert!(!game.handle_event(Event::Right));
+        assert!(game.handle_event(Event::Type('A')));
+        assert!(game.handle_event(Event::Type('l')));
+        assert!(game.handle_event(Event::Type('i')));
+        assert!(game.handle_event(Event::Type('c')));
+        assert!(game.handle_event(Event::Delete));
+        assert!(game.handle_event(Event::Type('n')));
+        assert!(game.handle_event(Event::Type('e')));
+        assert!(game.handle_event(Event::Right));
+        assert!(game.handle_event(Event::Right));
+        assert!(game.handle_event(Event::Right));
+        assert!(!game.handle_event(Event::Right));
+        assert!(game.handle_event(Event::Tick(1.1)));
+        assert!(game.game_over);
     }
 }
