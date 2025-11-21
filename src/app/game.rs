@@ -39,7 +39,7 @@ impl Game {
         }
 
         let timestamp = js_sys::Date::new_0().value_of();
-        let delta_time = (timestamp - self.last_timestamp) / 1_000.0;
+        let delta_time = timestamp - self.last_timestamp;
         self.last_timestamp = timestamp;
 
         self.state
@@ -79,7 +79,7 @@ impl Component for Game {
         Self {
             _tick_handle,
             _listener,
-            state: GameState::new(12, 16, 1_000.0, 5_000.0),
+            state: GameState::new(12, 16, 800.0, 4_000.0),
             canvas_node: NodeRef::default(),
             last_timestamp: timestamp,
             swatch: Swatch::new(),
