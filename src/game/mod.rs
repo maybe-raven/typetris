@@ -75,6 +75,7 @@ impl Game {
 
         let mut ret = false;
         if timer_msg.should_fall() {
+            ret = true;
             use board::Msg as M;
             match self.board.fall_tick(timer_msg.should_drift()) {
                 Some(M::GameOver) => self.game_over = true,
@@ -86,9 +87,9 @@ impl Game {
                         .collect::<BTreeSet<_>>()
                         .len()
                 }
-                None => (),
+                Some(M::Updated) => (),
+                None => ret = false,
             }
-            ret = true;
         }
         if timer_msg.should_spawn() {
             self.board.spawn_block();
@@ -275,7 +276,7 @@ mod test {
         assert_eq!(game.score, 3);
 
         for _ in 0..500 {
-            assert!(game.handle_event(Event::Tick(1.0)));
+            game.handle_event(Event::Tick(1.0));
             if game.game_over {
                 return;
             }
@@ -352,7 +353,7 @@ mod test {
         let mut game = Game::new(settings);
         use Event as E;
 
-        game.handle_event(E::Tick(0.25));
+        assert!(!game.handle_event(E::Tick(0.25)));
         repeat_event(&mut game, E::Tick(0.2), 4);
         assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 1));
 
@@ -360,7 +361,7 @@ mod test {
         repeat_event(&mut game, E::Tick(0.2), 14);
         assert!(dbg!(game.board.blocks().first()).is_some_and(|b| b.position.y == 15));
         assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 1));
-        game.handle_event(E::Tick(0.2));
+        assert!(game.handle_event(E::Tick(0.2)));
         assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 2));
         assert!(
             dbg!(game.board.blocks().first()).is_some_and(|b| b.is_settled() && b.position.y == 15)
@@ -429,11 +430,11 @@ mod test {
         assert!(game.handle_event(Event::Type('m')));
         assert!(game.handle_event(Event::Type('e')));
         assert!(game.handle_event(Event::Left));
-        game.handle_event(Event::Tick(0.25));
+        assert!(!game.handle_event(Event::Tick(0.25)));
         assert!(game.handle_event(Event::Left));
-        game.handle_event(Event::Tick(0.2));
+        assert!(!game.handle_event(Event::Tick(0.2)));
         assert!(game.handle_event(Event::Left));
-        game.handle_event(Event::Tick(0.2));
+        assert!(game.handle_event(Event::Tick(0.2)));
         assert!(game.board.get_focused().is_none());
     }
 

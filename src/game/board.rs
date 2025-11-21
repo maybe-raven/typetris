@@ -36,6 +36,7 @@ impl BoardPosition {
 pub enum Msg {
     GameOver,
     BlocksSettled,
+    Updated,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, CopyGetters, Getters)]
@@ -141,6 +142,7 @@ impl Board {
 
     pub(super) fn fall_tick(&mut self, include_interactable: bool) -> Option<Msg> {
         let mut newly_settled = false;
+        let mut has_update = false;
         for i in 0..self.blocks.len() {
             let block = &self.blocks[i];
             if block.is_settled() || (!include_interactable && block.is_interactable()) {
@@ -156,9 +158,14 @@ impl Board {
                 }
             } else {
                 block.position.y += 1;
+                has_update = true;
             }
         }
-        newly_settled.then_some(Msg::BlocksSettled)
+        if newly_settled {
+            Some(Msg::BlocksSettled)
+        } else {
+            has_update.then_some(Msg::Updated)
+        }
     }
 
     #[inline]
@@ -457,11 +464,11 @@ mod test {
             board.blocks.push(block(2, 20, "Bayanetta"));
 
             assert_unchanged(&board, fall);
-            assert!(board.fall_tick(true).is_none());
+            assert_eq!(board.fall_tick(true), Some(Msg::Updated));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 21 });
             assert_eq!(board.get_focused_index(), Some(i));
 
-            assert!(board.fall_tick(true).is_none());
+            assert_eq!(board.fall_tick(true), Some(Msg::Updated));
             assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.get_focused_index(), None);
@@ -476,12 +483,12 @@ mod test {
             board.blocks.push(block(2, 20, "Bayanetta"));
             board.blocks.push(block(7, 2, "Hornet"));
 
-            assert!(board.fall_tick(true).is_none());
+            assert_eq!(board.fall_tick(true), Some(Msg::Updated));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 21 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 3 });
             assert_eq!(board.get_focused_index(), Some(i));
 
-            assert!(board.fall_tick(true).is_none());
+            assert_eq!(board.fall_tick(true), Some(Msg::Updated));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 4 });
             assert_eq!(board.get_focused_index(), Some(i));
@@ -502,7 +509,7 @@ mod test {
             );
             let i = board.blocks.len();
             board.blocks.push(block(2, 0, "Bayanetta"));
-            assert!(board.fall_tick(true).is_none());
+            assert_eq!(board.fall_tick(true), Some(Msg::Updated));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 1 });
             assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 1 });
@@ -516,10 +523,11 @@ mod test {
         #[test]
         fn settle_bottom() {
             let mut board = Board::new(4, 4, true);
-            assert!(board.fall_tick(true).is_none());
-            assert!(board.fall_tick(true).is_none());
-            assert!(board.fall_tick(true).is_none());
+            assert_eq!(board.fall_tick(true), Some(Msg::Updated));
+            assert_eq!(board.fall_tick(true), Some(Msg::Updated));
+            assert_eq!(board.fall_tick(true), Some(Msg::Updated));
             assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
+            assert_unchanged(&board, drift);
         }
     }
 
