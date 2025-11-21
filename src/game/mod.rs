@@ -68,7 +68,6 @@ impl Game {
                 Some(M::GameOver) => self.game_over = true,
                 Some(M::BlocksSettled) => {
                     let cleared = self.board.clear_completed();
-                    println!("{cleared:?}");
                     self.score += cleared
                         .iter()
                         .map(|b| b.position.y)
@@ -82,6 +81,9 @@ impl Game {
         if timer_msg.should_spawn() {
             self.board.spawn_block();
             ret = true;
+            if self.board.find_max_y(self.board.blocks().len() - 1) == 0 {
+                self.game_over = true;
+            }
         }
 
         ret
@@ -248,7 +250,6 @@ mod test {
             assert!(game.handle_event(Event::Tick(1.0)));
         }
 
-        println!("{:?}", game.board.blocks());
         assert_eq!(game.score, 3);
 
         for _ in 0..500 {
@@ -258,5 +259,50 @@ mod test {
             }
         }
         panic!("the game should end after running without playing for a while");
+    }
+
+    #[test]
+    fn t1() {
+        // The longest word in the current dictionary is 8 letters long, so a 10-wide board means
+        // one block won't fill a row by itself.
+        let mut game = Game::new(10, 4, 1.0, 2.0);
+        use Event as E;
+        assert!(game.handle_event(E::Tick(2.1)));
+
+        for _ in 0..4 {
+            let text = *game.board.get_focused().unwrap().assigned_text();
+            for ch in text.chars() {
+                game.handle_event(E::Type(ch));
+            }
+            for _ in 0..10 {
+                game.handle_event(E::Left);
+            }
+            game.handle_event(E::Next);
+            game.handle_event(E::Tick(1.0));
+            game.handle_event(E::Tick(1.0));
+        }
+
+        assert!(game.game_over);
+    }
+
+    #[test]
+    fn t2() {
+        let mut game = Game::new(4, 4, 1.0, 4.0);
+        use Event as E;
+
+        game.board.push_block(Block::with_text_x("an", 0));
+        assert!(game.handle_event(E::Next));
+        assert!(game.handle_event(E::Tick(1.1)));
+        assert!(game.handle_event(E::Tick(1.0)));
+        game.board.push_block(Block::with_text_x("ny", 2));
+        assert!(game.handle_event(E::Next));
+        assert!(game.handle_event(E::Tick(1.0)));
+        assert!(game.handle_event(E::Tick(1.0)));
+        // new block spawns here after 4.1 time unit.
+        assert!(game.handle_event(E::Tick(1.0)));
+        // blocks settle and clear
+        assert_eq!(game.board.blocks().len(), 1);
+        assert_eq!(game.score, 1);
+        assert!(game.board.get_focused().is_some());
     }
 }

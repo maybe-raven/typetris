@@ -60,7 +60,7 @@ impl Board {
 
     /// Find the max y of the block at `target_index` to prevent overlapping with other blocks
     /// below it.
-    fn find_max_y(&self, target_index: usize) -> u8 {
+    pub(super) fn find_max_y(&self, target_index: usize) -> u8 {
         let target_block = &self.blocks[target_index];
         self.blocks
             .iter()
@@ -124,7 +124,7 @@ impl Board {
                     if removals.contains(&b.position.y) {
                         return true;
                     }
-                    if b.position.y < max_y {
+                    if b.is_settled() && b.position.y < max_y {
                         b.state = BlockState::Falling;
                     }
                     false
