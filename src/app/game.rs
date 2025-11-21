@@ -89,15 +89,21 @@ impl Component for Game {
     fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
             <>
-                <canvas class="h-screen aspect-[13/15]" ref={self.canvas_node.clone()} />
-                if self.state.game_over() {
-                    <h1 class="text-error text-9xl font-bold">{"Game Over"}</h1>
-                } else {
+                <div
+                    class="flex h-screen w-full flex-col items-center justify-center gap-8 overflow-hidden p-4 lg:flex-row-reverse"
+                >
                     <div class="flex flex-col items-center justify-center">
-                        <h1 class="text-9xl font-bold text-light1">{"Score:"}</h1>
-                        <h2 class="text-7xl text-light2">{self.state.score()}</h2>
+                        if self.state.game_over() {
+                            <h1 class="text-error text-8xl font-bold">{"Game Over"}</h1>
+                        }
+                        <h1 class="text-light1 text-6xl font-bold">{"Score:"}</h1>
+                        <h2 class="text-light2 text-4xl">{self.state.score()}</h2>
                     </div>
-                }
+                    <canvas
+                        class="aspect-[12/16] w-full max-w-screen-sm lg:h-full lg:w-auto lg:max-w-none"
+                        ref={self.canvas_node.clone()}
+                    />
+                </div>
             </>
         }
     }
