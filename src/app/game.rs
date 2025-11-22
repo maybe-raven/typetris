@@ -110,7 +110,24 @@ impl Component for Game {
                         if self.state.is_splash(){
                             <p>{"You have to type each word before you can move it."}</p>
                             <p>{"Line up and fill each row to clear it and score."}</p>
-                            <button class="font-semibold text-sm bg-primary rounded-full shadow-sm px-4 py-2 mt-4 max-w-fit bg-base" onclick={new_game_onclick}>{"Play"}</button>
+                            <p>
+                                <span class="text-primary">{"Left"}</span>{" and "}<span
+                                    class="text-primary"
+                                    >{"right"}</span
+                                >{" arrow keys move the blocks."}
+                            </p>
+                            <p>
+                                <span class="text-primary">{"Enter"}</span>{" and "}<span
+                                    class="text-primary"
+                                    >{"tab"}</span
+                                >{" key drops the block"}
+                            </p>
+                            <button
+                                class="bg-primary bg-base mt-4 max-w-fit rounded-full px-4 py-2 text-sm font-semibold shadow-sm"
+                                onclick={new_game_onclick}
+                            >
+                                {"Play"}
+                            </button>
                         } else {
                             if self.state.is_game_over() {
                                 <h1 class="text-error text-8xl font-bold">{"Game Over"}</h1>
