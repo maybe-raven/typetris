@@ -54,7 +54,7 @@ impl Board {
     pub fn new(width: u8, height: u8, starts_with_one: bool) -> Self {
         Self {
             blocks: if starts_with_one {
-                vec![Block::new(width)]
+                vec![Block::random(width)]
             } else {
                 vec![]
             },
@@ -84,10 +84,7 @@ impl Board {
 
     /// Clear completed rows and return the number of rows cleared.
     pub(super) fn clear_completed(&mut self) -> Vec<Block> {
-        self.blocks.sort_by(|a, b| match a.state.cmp(&b.state) {
-            Ordering::Equal => a.position.cmp(&b.position),
-            ord => ord,
-        });
+        self.sort();
         let mut removals = Vec::new();
         for chunk in self
             .blocks
@@ -185,7 +182,7 @@ impl Board {
 
     #[inline]
     pub(super) fn spawn_block(&mut self) {
-        self.blocks.push(Block::new(self.width));
+        self.blocks.push(Block::random(self.width));
     }
 
     #[inline]
@@ -241,6 +238,19 @@ impl Board {
         self.blocks[focus_index].position.x += 1;
         true
     }
+
+    #[inline]
+    pub(super) fn sort(&mut self) {
+        self.blocks.sort_by(|a, b| match a.state.cmp(&b.state) {
+            Ordering::Equal => a.position.cmp(&b.position),
+            ord => ord,
+        });
+    }
+
+    #[inline]
+    pub(super) fn push_block(&mut self, block: Block) {
+        self.blocks.push(block);
+    }
 }
 
 #[cfg(test)]
@@ -266,11 +276,6 @@ impl Board {
             width: 16,
             height: 32,
         }
-    }
-
-    #[inline]
-    pub(super) fn push_block(&mut self, block: Block) {
-        self.blocks.push(block);
     }
 }
 

@@ -7,9 +7,16 @@ use std::collections::BTreeSet;
 
 use block::Block;
 use board::Board;
-use getset::{CopyGetters, Getters};
+use getset::{CopyGetters, Getters, WithSetters};
 use settings::Settings;
 use timer::Timer;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum State {
+    Splash,
+    Playing,
+    GameOver,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum Event {
@@ -19,17 +26,20 @@ pub enum Event {
     Next,
     Left,
     Right,
+    NewGame,
 }
 
-#[derive(Debug, Clone, PartialEq, CopyGetters, Getters)]
+#[derive(Debug, Clone, PartialEq, CopyGetters, Getters, WithSetters)]
 pub struct Game {
+    #[getset(get = "pub", set_with)]
+    settings: Settings,
+    #[getset(get_copy = "pub")]
+    state: State,
     #[getset(get = "pub")]
     board: Board,
     timer: Timer,
     #[getset(get_copy = "pub")]
     score: usize,
-    #[getset(get_copy = "pub")]
-    game_over: bool,
 }
 
 impl Default for Game {
@@ -39,38 +49,77 @@ impl Default for Game {
 }
 
 impl Game {
-    #[inline]
-    pub fn new(settings: Settings) -> Self {
+    pub fn splash() -> Self {
+        let mut board = Board::new(12, 16, false);
+        use block::State as S;
+        board.push_block(Block::new("Typetris", S::Interactable, 2, 0));
+        board.push_block(Block::new("It's", S::Interactable, 0, 4));
+        board.push_block(Block::new("like", S::Interactable, 3, 5));
+        board.push_block(Block::new("Tetris", S::Interactable, 6, 6));
+        board.push_block(Block::new("but", S::Interactable, 8, 8));
+        board.push_block(Block::new("make", S::Interactable, 4, 9));
+        board.push_block(Block::new("it", S::Interactable, 2, 10));
+        board.push_block(Block::new("a", S::Interactable, 4, 11));
+        let mut block = Block::new("typing", S::Interactable, 5, 12);
+        block.add_char('t');
+        block.add_char('y');
+        block.add_char('i');
+        block.add_char('n');
+        board.push_block(block);
+        board.push_block(Block::new("game", S::Settled, 4, 15));
+        board.sort();
+        let settings = Settings::default().with_width(12).with_height(16);
         Self {
-            board: Board::new(settings.width, settings.height, settings.starts_with_one),
+            board,
             timer: Timer::new(
                 settings.fall_interval,
                 settings.spawn_interval,
                 settings.drift_interval,
             ),
             score: 0,
-            game_over: false,
+            state: State::Splash,
+            settings,
+        }
+    }
+
+    #[inline]
+    pub fn new(settings: Settings) -> Self {
+        if settings.starts_with_splash {
+            Self::splash().with_settings(settings.with_starts_with_splash(false))
+        } else {
+            Self {
+                board: Board::new(settings.width, settings.height, settings.starts_with_one),
+                timer: Timer::new(
+                    settings.fall_interval,
+                    settings.spawn_interval,
+                    settings.drift_interval,
+                ),
+                score: 0,
+                state: State::Playing,
+                settings,
+            }
         }
     }
 
     /// Handle the given event and return a boolean indicating whether state has changed.
     #[inline]
     pub fn handle_event(&mut self, event: Event) -> bool {
-        match event {
-            Event::Tick(delta_time) => self.tick(delta_time),
-            Event::Type(ch) => self.add_char(ch),
-            Event::Delete => self.delete_char(),
-            Event::Next => self.focus_next(),
-            Event::Left => self.left(),
-            Event::Right => self.right(),
+        match (self.is_playing(), event) {
+            (_, Event::NewGame) => {
+                self.new_game();
+                true
+            }
+            (true, Event::Tick(delta_time)) => self.tick(delta_time),
+            (true, Event::Type(ch)) => self.add_char(ch),
+            (true, Event::Delete) => self.delete_char(),
+            (true, Event::Next) => self.focus_next(),
+            (true, Event::Left) => self.left(),
+            (true, Event::Right) => self.right(),
+            (false, _) => false,
         }
     }
 
     fn tick(&mut self, delta_time: f64) -> bool {
-        if self.game_over {
-            return false;
-        }
-
         let timer_msg = self.timer.tick(delta_time);
 
         let mut ret = false;
@@ -78,7 +127,7 @@ impl Game {
             ret = true;
             use board::Msg as M;
             match self.board.fall_tick(timer_msg.should_drift()) {
-                Some(M::GameOver) => self.game_over = true,
+                Some(M::GameOver) => self.state = State::GameOver,
                 Some(M::BlocksSettled) => {
                     let cleared = self.board.clear_completed();
                     self.score += cleared
@@ -95,7 +144,7 @@ impl Game {
             self.board.spawn_block();
             ret = true;
             if self.board.find_max_y(self.board.blocks().len() - 1) == 0 {
-                self.game_over = true;
+                self.state = State::GameOver;
             }
         }
 
@@ -133,6 +182,26 @@ impl Game {
     #[inline]
     fn right(&mut self) -> bool {
         self.board.right()
+    }
+
+    #[inline]
+    pub fn is_game_over(&self) -> bool {
+        self.state == State::GameOver
+    }
+
+    #[inline]
+    pub fn is_playing(&self) -> bool {
+        self.state == State::Playing
+    }
+
+    #[inline]
+    pub fn is_splash(&self) -> bool {
+        self.state == State::Splash
+    }
+
+    #[inline]
+    fn new_game(&mut self) {
+        *self = Self::new(self.settings);
     }
 }
 
@@ -277,7 +346,7 @@ mod test {
 
         for _ in 0..500 {
             game.handle_event(Event::Tick(1.0));
-            if game.game_over {
+            if game.is_game_over() {
                 return;
             }
         }
@@ -311,7 +380,7 @@ mod test {
             game.handle_event(E::Tick(1.0));
         }
 
-        assert!(game.game_over);
+        assert_eq!(game.state, State::GameOver);
     }
 
     #[test]
@@ -465,6 +534,28 @@ mod test {
         assert!(game.handle_event(Event::Right));
         assert!(!game.handle_event(Event::Right));
         assert!(game.handle_event(Event::Tick(1.1)));
-        assert!(game.game_over);
+        assert_eq!(game.state, State::GameOver);
+    }
+
+    #[test]
+    fn splash() {
+        let settings = Settings::default()
+            .with_fall_interval(1.0)
+            .with_drift_interval(1)
+            .with_starts_with_splash(true);
+        let mut game = Game::new(settings);
+        assert_eq!(game.state, State::Splash);
+        assert_eq!(game.board, Game::splash().board);
+        assert_unchanged(&game, |g| !g.handle_event(Event::Tick(1.1)));
+        assert_unchanged(&game, |g| !g.handle_event(Event::Left));
+        assert_unchanged(&game, |g| !g.handle_event(Event::Right));
+        assert_unchanged(&game, |g| !g.handle_event(Event::Type('a')));
+        assert_unchanged(&game, |g| !g.handle_event(Event::Delete));
+        assert!(game.handle_event(Event::NewGame));
+        assert_eq!(game.board.blocks().len(), 1);
+        assert_eq!(game.board.width(), settings.width);
+        assert_eq!(game.board.height(), settings.height);
+        assert!(game.handle_event(Event::Tick(1.1)));
+        assert!(game.handle_event(Event::Type('a')));
     }
 }

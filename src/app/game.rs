@@ -5,6 +5,7 @@ use gloo_console::log;
 use gloo_timers::callback::Interval;
 use typetris::game::Event;
 use typetris::game::Game as GameState;
+use typetris::game::settings::Settings;
 use web_sys::{
     CanvasRenderingContext2d, HtmlCanvasElement,
     js_sys::{self},
@@ -18,6 +19,7 @@ use swatch::Swatch;
 pub(crate) enum Msg {
     Tick,
     Keydown(KeyboardEvent),
+    NewGame,
 }
 
 #[derive(Debug, Clone, Properties, PartialEq, Eq)]
@@ -34,10 +36,6 @@ pub(crate) struct Game {
 
 impl Game {
     fn tick(&mut self) -> bool {
-        if self.state.game_over() {
-            return false;
-        }
-
         let timestamp = js_sys::Date::new_0().value_of();
         let delta_time = timestamp - self.last_timestamp;
         self.last_timestamp = timestamp;
@@ -59,6 +57,11 @@ impl Game {
         };
         self.state.handle_event(event)
     }
+
+    fn new_game(&mut self) -> bool {
+        self.last_timestamp = js_sys::Date::new_0().value_of();
+        self.state.handle_event(Event::NewGame)
+    }
 }
 
 impl Component for Game {
@@ -79,30 +82,44 @@ impl Component for Game {
         Self {
             _tick_handle,
             _listener,
-            state: GameState::default(),
+            state: GameState::new(Settings::default().with_starts_with_splash(true)),
             canvas_node: NodeRef::default(),
             last_timestamp: timestamp,
             swatch: Swatch::new(),
         }
     }
 
-    fn view(&self, _ctx: &Context<Self>) -> Html {
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let style = format!(
+            "aspect-ratio: {} / {}",
+            self.state.board().width(),
+            self.state.board().height()
+        );
+        let new_game_onclick = ctx.link().callback(|_| Msg::NewGame);
         html! {
             <>
                 <div
-                    class="flex h-screen w-full flex-col items-center justify-center gap-8 overflow-hidden p-4 lg:flex-row-reverse"
+                    class="flex h-screen w-full flex-col items-center justify-center gap-8 overflow-hidden p-4 lg:flex-row"
                 >
-                    <div class="flex flex-col items-center justify-center">
-                        if self.state.game_over() {
-                            <h1 class="text-error text-8xl font-bold">{"Game Over"}</h1>
-                        }
-                        <h1 class="text-light1 text-6xl font-bold">{"Score:"}</h1>
-                        <h2 class="text-light2 text-4xl">{self.state.score()}</h2>
-                    </div>
                     <canvas
-                        class="aspect-[12/16] w-full max-w-screen-sm lg:h-full lg:w-auto lg:max-w-none"
+                        class="w-full max-w-screen-sm lg:h-full lg:w-auto lg:max-w-none"
+                        style={style}
                         ref={self.canvas_node.clone()}
                     />
+                    <div class="flex flex-col items-center justify-center">
+                        if self.state.is_splash(){
+                            <p>{"You have to type each word before you can move it."}</p>
+                            <p>{"Line up and fill each row to clear it and score."}</p>
+                            <button class="font-semibold text-sm bg-primary rounded-full shadow-sm px-4 py-2 mt-4 max-w-fit bg-base" onclick={new_game_onclick}>{"Play"}</button>
+                        } else {
+                            if self.state.is_game_over() {
+                                <h1 class="text-error text-8xl font-bold">{"Game Over"}</h1>
+                            }
+                            <h1 class="text-light1 text-6xl font-bold">{"Score:"}</h1>
+                            <h2 class="text-light2 text-4xl">{self.state.score()}</h2>
+                            <button class="font-semibold text-sm bg-primary rounded-full shadow-sm px-4 py-2 mt-4 max-w-fit bg-base" onclick={new_game_onclick}>{"Restart"}</button>
+                        }
+                    </div>
                 </div>
             </>
         }
@@ -198,6 +215,7 @@ impl Component for Game {
         match msg {
             Msg::Tick => self.tick(),
             Msg::Keydown(e) => self.keydown(e),
+            Msg::NewGame => self.new_game(),
         }
     }
 }

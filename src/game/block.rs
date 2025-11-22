@@ -25,7 +25,7 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(board_width: u8) -> Self {
+    pub fn random(board_width: u8) -> Self {
         let mut rng = rng();
         let text = *WORDS
             .iter()
@@ -40,6 +40,16 @@ impl Block {
         };
         ret.position.x = rng.random_range(0..=(board_width - ret.width()));
         ret
+    }
+
+    #[inline]
+    pub(super) fn new(assigned_text: &'static str, state: State, x: u8, y: u8) -> Self {
+        Self {
+            state,
+            assigned_text,
+            input_text: String::new(),
+            position: BoardPosition { x, y },
+        }
     }
 
     #[inline]
@@ -108,42 +118,22 @@ impl Block {
 impl Block {
     #[inline]
     pub(super) fn with_text_x(assigned_text: &'static str, x: u8) -> Self {
-        Self {
-            state: State::Interactable,
-            assigned_text,
-            input_text: String::new(),
-            position: BoardPosition { x, y: 0 },
-        }
+        Self::new(assigned_text, State::Interactable, x, 0)
     }
 
     #[inline]
     pub(super) fn new_interactable(assigned_text: &'static str, x: u8, y: u8) -> Self {
-        Self {
-            state: State::Interactable,
-            assigned_text,
-            input_text: String::new(),
-            position: BoardPosition { x, y },
-        }
+        Self::new(assigned_text, State::Interactable, x, y)
     }
 
     #[inline]
     pub(super) fn new_settled(assigned_text: &'static str, x: u8, y: u8) -> Self {
-        Self {
-            state: State::Settled,
-            assigned_text,
-            input_text: String::new(),
-            position: BoardPosition { x, y },
-        }
+        Self::new(assigned_text, State::Settled, x, y)
     }
 
     #[inline]
     pub(super) fn new_falling(assigned_text: &'static str, x: u8, y: u8) -> Self {
-        Self {
-            state: State::Falling,
-            assigned_text,
-            input_text: String::new(),
-            position: BoardPosition { x, y },
-        }
+        Self::new(assigned_text, State::Falling, x, y)
     }
 }
 
@@ -158,7 +148,7 @@ mod test {
         if width == 0 {
             return true;
         }
-        let b = Block::new(width);
+        let b = Block::random(width);
         assert!(!b.assigned_text.is_empty());
         assert!(b.assigned_text.is_ascii());
         assert!(b.assigned_text.len() <= width as usize);
