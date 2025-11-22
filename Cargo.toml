@@ -2,7 +2,7 @@
 name = "typetris"
 version = "0.1.0"
 edition = "2024"
-description = "A Tetris and typing game hybrid."
+description = "Tetris but make it a typing game."
 readme = "README.md"
 license = "MIT"
 
