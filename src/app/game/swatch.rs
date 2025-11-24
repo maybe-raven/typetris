@@ -2,6 +2,7 @@ use web_sys::CssStyleDeclaration;
 
 #[derive(Debug, Clone)]
 pub(super) struct Swatch {
+    pub(super) reticle_color: String,
     pub(super) bg_color: String,
     pub(super) regular_block_color: String,
     pub(super) disabled_block_color: String,
@@ -12,6 +13,7 @@ pub(super) struct Swatch {
 impl Default for Swatch {
     fn default() -> Self {
         Self {
+            reticle_color: "white".into(),
             bg_color: "black".into(),
             regular_block_color: "purple".into(),
             disabled_block_color: "gray".into(),
@@ -33,5 +35,6 @@ impl Swatch {
         self.bg_color = style.get_property_value("--color-dark2").unwrap();
         self.success_color = style.get_property_value("--color-success").unwrap();
         self.error_color = style.get_property_value("--color-error").unwrap();
+        self.reticle_color = style.get_property_value("--color-reticle").unwrap();
     }
 }

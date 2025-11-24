@@ -5,6 +5,7 @@ use gloo_console::log;
 use gloo_timers::callback::Interval;
 use typetris::game::Event;
 use typetris::game::Game as GameState;
+use typetris::game::board::BoardPosition;
 use typetris::game::settings::Settings;
 use web_sys::{
     CanvasRenderingContext2d, HtmlCanvasElement,
@@ -175,7 +176,7 @@ impl Component for Game {
         context.set_font(format!("normal {:.0}px system-ui", cell_width * 0.7).as_str());
         context.set_text_align("center");
         context.set_text_baseline("middle");
-        context.set_stroke_style_str("black");
+        context.set_line_width(5.0);
 
         for (index, block) in self.state.board().blocks().iter().enumerate() {
             let pos = block.position();
@@ -224,7 +225,37 @@ impl Component for Game {
                 context.move_to(x, y);
                 context.line_to(x, y + cell_height);
             }
+            context.set_stroke_style_str("black");
             context.stroke();
+
+            if let Some(focus) = self.state.board().get_focused() {
+                let n = focus.input_text().len();
+                if n < focus.assigned_text().len() {
+                    let BoardPosition { x, y } = focus.position();
+                    let x = x as f64 * cell_width + n as f64 * cell_width;
+                    let y = y as f64 * cell_height;
+                    context.begin_path();
+                    context
+                        .arc(
+                            x + cell_width * 0.5,
+                            y + cell_height * 0.5,
+                            cell_width.min(cell_height) * 0.4,
+                            0.0,
+                            std::f64::consts::PI * 2.0,
+                        )
+                        .unwrap();
+                    context.move_to(x + cell_width * 0.1, y + cell_height * 0.1);
+                    context.line_to(x + cell_width * 0.2, y + cell_height * 0.2);
+                    context.move_to(x + cell_width * 0.1, y + cell_height * 0.9);
+                    context.line_to(x + cell_width * 0.2, y + cell_height * 0.8);
+                    context.move_to(x + cell_width * 0.9, y + cell_height * 0.1);
+                    context.line_to(x + cell_width * 0.8, y + cell_height * 0.2);
+                    context.move_to(x + cell_width * 0.9, y + cell_height * 0.9);
+                    context.line_to(x + cell_width * 0.8, y + cell_height * 0.8);
+                    context.set_stroke_style_str(&self.swatch.reticle_color);
+                    context.stroke();
+                }
+            }
         }
     }
 

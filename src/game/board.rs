@@ -30,6 +30,52 @@ impl BoardPosition {
     pub fn new() -> Self {
         Self::default()
     }
+
+    #[inline]
+    pub const fn to_render_coords(
+        self,
+        cell_width: f64,
+        cell_height: f64,
+        anchor: AnchorCoordinates,
+    ) -> RenderCoordinates {
+        RenderCoordinates {
+            x: self.x as f64 * cell_width + cell_width * anchor.x,
+            y: self.y as f64 * cell_height + cell_height * anchor.y,
+        }
+    }
+
+    #[inline]
+    pub const fn center(self, cell_width: f64, cell_height: f64) -> RenderCoordinates {
+        self.to_render_coords(
+            cell_width,
+            cell_height,
+            AnchorCoordinates { x: 0.5, y: 0.5 },
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RenderCoordinates {
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, CopyGetters)]
+pub struct AnchorCoordinates {
+    #[getset(get_copy = "pub")]
+    x: f64,
+    #[getset(get_copy = "pub")]
+    y: f64,
+}
+impl AnchorCoordinates {
+    #[inline]
+    pub const fn new(x: f64, y: f64) -> Option<Self> {
+        if 0.0 <= x && x <= 1.0 && 0.0 <= y && y <= 1.0 {
+            Some(Self { x, y })
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
