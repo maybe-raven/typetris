@@ -12,12 +12,15 @@ path = "src/lib.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
+derive_more = { version = "2.0.1", features = ["deref", "deref_mut"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 getset = "0.1.6"
 gloo = "0.11.0"
 gloo-console = "0.3.0"
 gloo-timers = "0.3.0"
+iter_tools = "0.43.0"
 rand = "0.9.2"
+vector2d = "3.1.1"
 web-sys = { version = "0.3.77", features = ["CanvasRenderingContext2d", "CssStyleDeclaration", "DomRect", "Element", "HtmlCanvasElement", "Window"] }
 yew = { version="0.21", features=["csr"] }
 

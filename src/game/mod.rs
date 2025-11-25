@@ -1,5 +1,6 @@
 pub mod block;
 pub mod board;
+mod english;
 pub mod settings;
 mod timer;
 
@@ -52,21 +53,48 @@ impl Game {
     pub fn splash() -> Self {
         let mut board = Board::new(12, 16, false);
         use block::State as S;
-        board.push_block(Block::new("Typetris", S::Interactable, 2, 0));
-        board.push_block(Block::new("It's", S::Interactable, 0, 4));
-        board.push_block(Block::new("like", S::Interactable, 3, 5));
-        board.push_block(Block::new("Tetris", S::Interactable, 6, 6));
-        board.push_block(Block::new("but", S::Interactable, 8, 8));
-        board.push_block(Block::new("make", S::Interactable, 4, 9));
-        board.push_block(Block::new("it", S::Interactable, 2, 10));
-        board.push_block(Block::new("a", S::Interactable, 4, 11));
-        let mut block = Block::new("typing", S::Interactable, 5, 12);
+        board.push_block(
+            Block::new_line("Typetris", S::Interactable, 2, 0)
+                .expect("static ascii text should be valid."),
+        );
+        board.push_block(
+            Block::new_line("It's", S::Interactable, 0, 4)
+                .expect("static ascii text should be valid."),
+        );
+        board.push_block(
+            Block::new_line("like", S::Interactable, 3, 5)
+                .expect("static ascii text should be valid."),
+        );
+        board.push_block(
+            Block::new_line("Tetris", S::Interactable, 6, 6)
+                .expect("static ascii text should be valid."),
+        );
+        board.push_block(
+            Block::new_line("but", S::Interactable, 8, 8)
+                .expect("static ascii text should be valid."),
+        );
+        board.push_block(
+            Block::new_line("make", S::Interactable, 4, 9)
+                .expect("static ascii text should be valid."),
+        );
+        board.push_block(
+            Block::new_line("it", S::Interactable, 2, 10)
+                .expect("static ascii text should be valid."),
+        );
+        board.push_block(
+            Block::new_line("a", S::Interactable, 4, 11)
+                .expect("static ascii text should be valid."),
+        );
+        let mut block = Block::new_line("typing", S::Interactable, 5, 12)
+            .expect("static ascii text should be valid.");
         block.add_char('t');
         block.add_char('y');
         block.add_char('i');
         block.add_char('n');
         board.push_block(block);
-        board.push_block(Block::new("game", S::Settled, 4, 15));
+        board.push_block(
+            Block::new_line("game", S::Settled, 4, 15).expect("static ascii text should be valid."),
+        );
         board.sort();
         let settings = Settings::default().with_width(12).with_height(16);
         Self {
@@ -130,11 +158,7 @@ impl Game {
                 Some(M::GameOver) => self.state = State::GameOver,
                 Some(M::BlocksSettled) => {
                     let cleared = self.board.clear_completed();
-                    self.score += cleared
-                        .iter()
-                        .map(|b| b.position.y)
-                        .collect::<BTreeSet<_>>()
-                        .len()
+                    self.score += cleared.iter().map(|b| b.y()).collect::<BTreeSet<_>>().len()
                 }
                 Some(M::Updated) => (),
                 None => ret = false,
@@ -237,7 +261,7 @@ mod test {
             assert!(
                 g.board
                     .get_focused()
-                    .is_some_and(|b| b.input_text() == expected_text)
+                    .is_some_and(|b| b.check_input_text(expected_text))
             );
         }
 
@@ -368,8 +392,15 @@ mod test {
         use Event as E;
 
         for _ in 0..4 {
-            let text = *game.board.get_focused().unwrap().assigned_text();
-            for ch in text.chars() {
+            let text = game
+                .board
+                .get_focused()
+                .unwrap()
+                .cells()
+                .iter()
+                .map(|c| char::from(c.assigned_char))
+                .collect::<Vec<_>>();
+            for ch in text {
                 game.handle_event(E::Type(ch));
             }
             for _ in 0..10 {
@@ -424,17 +455,15 @@ mod test {
 
         assert!(!game.handle_event(E::Tick(0.25)));
         repeat_event(&mut game, E::Tick(0.2), 4);
-        assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 1));
+        assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.y() == 1));
 
         assert!(game.handle_event(E::Next));
         repeat_event(&mut game, E::Tick(0.2), 14);
-        assert!(dbg!(game.board.blocks().first()).is_some_and(|b| b.position.y == 15));
-        assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 1));
+        assert!(dbg!(game.board.blocks().first()).is_some_and(|b| b.y() == 15));
+        assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.y() == 1));
         assert!(game.handle_event(E::Tick(0.2)));
-        assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.position.y == 2));
-        assert!(
-            dbg!(game.board.blocks().first()).is_some_and(|b| b.is_settled() && b.position.y == 15)
-        );
+        assert!(dbg!(game.board.get_focused()).is_some_and(|b| b.y() == 2));
+        assert!(dbg!(game.board.blocks().first()).is_some_and(|b| b.is_settled() && b.y() == 15));
     }
 
     #[test]

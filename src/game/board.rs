@@ -1,15 +1,28 @@
 use std::cmp::Ordering;
 
+use derive_more::{Deref, DerefMut};
 use getset::{CopyGetters, Getters};
+use vector2d::Vector2D;
 
 use super::Block;
 use super::block::State as BlockState;
+use super::block::bounding_box::MixAdd;
 
 /// A position on the board. Origin is top left.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct BoardPosition {
-    pub x: u8,
-    pub y: u8,
+///
+/// Positions are ordered by:
+/// y descending (bottom of the board to top) then x ascending (left to right)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deref, DerefMut, Hash)]
+pub struct BoardPosition(pub Vector2D<u8>);
+impl From<Vector2D<u8>> for BoardPosition {
+    fn from(value: Vector2D<u8>) -> Self {
+        Self(value)
+    }
+}
+impl From<BoardPosition> for Vector2D<u8> {
+    fn from(value: BoardPosition) -> Self {
+        value.0
+    }
 }
 impl Ord for BoardPosition {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -24,13 +37,20 @@ impl PartialOrd for BoardPosition {
         Some(self.cmp(other))
     }
 }
+impl<T> MixAdd<T> for BoardPosition
+where
+    Vector2D<u8>: MixAdd<T>,
+{
+    fn mix_add(self, other: T) -> Self {
+        Self(self.0.mix_add(other))
+    }
+}
 
 impl BoardPosition {
     #[inline]
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new(x: u8, y: u8) -> Self {
+        Self(Vector2D { x, y })
     }
-
     #[inline]
     pub const fn to_render_coords(
         self,
@@ -39,8 +59,8 @@ impl BoardPosition {
         anchor: AnchorCoordinates,
     ) -> RenderCoordinates {
         RenderCoordinates {
-            x: self.x as f64 * cell_width + cell_width * anchor.x,
-            y: self.y as f64 * cell_height + cell_height * anchor.y,
+            x: self.0.x as f64 * cell_width + cell_width * anchor.x,
+            y: self.0.y as f64 * cell_height + cell_height * anchor.y,
         }
     }
 
@@ -109,25 +129,6 @@ impl Board {
         }
     }
 
-    /// Find the max y of the block at `target_index` to prevent overlapping with other blocks
-    /// below it.
-    pub(super) fn find_max_y(&self, target_index: usize) -> u8 {
-        let target_block = &self.blocks[target_index];
-        self.blocks
-            .iter()
-            .enumerate()
-            .filter_map(|(i, block)| {
-                (i != target_index
-                    && block.is_settled()
-                    && block.position.y > target_block.position.y
-                    && block.intersect_x(target_block))
-                .then_some(block.position.y)
-            })
-            .min()
-            .unwrap_or(self.height)
-            - 1
-    }
-
     /// Clear completed rows and return the number of rows cleared.
     pub(super) fn clear_completed(&mut self) -> Vec<Block> {
         self.sort();
@@ -187,20 +188,22 @@ impl Board {
         let mut newly_settled = false;
         let mut has_update = false;
         for i in 0..self.blocks.len() {
-            let block = &self.blocks[i];
+            let block = &mut self.blocks[i];
             if block.is_settled() || (!include_interactable && block.is_interactable()) {
                 continue;
             }
-            let max_y = self.find_max_y(i);
-            let block = &mut self.blocks[i];
-            if block.position.y == max_y {
+
+            block.shift(Vector2D::new(0, 1));
+            let block = &self.blocks[i];
+            if self.blocks.iter().any(|b| block.intersect(&b)) {
+                let block = &mut self.blocks[i];
+                block.shift(Vector2D::new(0, -1));
                 block.state = BlockState::Settled;
                 newly_settled = true;
-                if max_y == 0 {
+                if block.y() == 0 {
                     return Some(Msg::GameOver);
                 }
             } else {
-                block.position.y += 1;
                 has_update = true;
             }
         }
@@ -323,6 +326,15 @@ impl Board {
             height: 32,
         }
     }
+    #[inline]
+    pub(super) fn no_overlap(&self) -> bool {
+        use iter_tools::Itertools;
+
+        self.blocks
+            .iter()
+            .flat_map(|b| b.cells().iter().map(|c| c.position))
+            .all_unique()
+    }
 }
 
 #[cfg(test)]
@@ -383,11 +395,10 @@ mod test {
             block.add_char('b');
             block.add_char('c');
             assert!(board.left());
-            assert!(
-                board
-                    .get_focused()
-                    .is_some_and(|b| b.position == BoardPosition { x: 4, y: 3 })
-            )
+            let block = board.get_focused().unwrap();
+            assert_eq!(block.x(), 4);
+            assert_eq!(block.y(), 3);
+            assert!(board.no_overlap());
         }
 
         #[test]
@@ -431,11 +442,10 @@ mod test {
             block.add_char('b');
             block.add_char('c');
             assert!(board.right());
-            assert!(
-                board
-                    .get_focused()
-                    .is_some_and(|b| b.position == BoardPosition { x: 6, y: 3 })
-            )
+            let block = board.get_focused().unwrap();
+            assert_eq!(block.x(), 6);
+            assert_eq!(block.y(), 3);
+            assert!(board.no_overlap());
         }
 
         #[test]
@@ -516,13 +526,19 @@ mod test {
 
             assert_unchanged(&board, fall);
             assert_eq!(board.fall_tick(true), Some(Msg::Updated));
-            assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 21 });
+            let block = &board.blocks[i];
+            assert_eq!(block.x(), 2);
+            assert_eq!(block.y(), 21);
             assert_eq!(board.get_focused_index(), Some(i));
+            assert!(board.no_overlap());
 
             assert_eq!(board.fall_tick(true), Some(Msg::Updated));
             assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
-            assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
+            let block = &board.blocks[i];
+            assert_eq!(block.x(), 2);
+            assert_eq!(block.y(), 22);
             assert_eq!(board.get_focused_index(), None);
+            assert!(board.no_overlap());
 
             assert_unchanged(&board, drift);
         }
@@ -535,16 +551,19 @@ mod test {
             board.blocks.push(block(7, 2, "Hornet"));
 
             assert_eq!(board.fall_tick(true), Some(Msg::Updated));
+            assert!(board.no_overlap());
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 21 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 3 });
             assert_eq!(board.get_focused_index(), Some(i));
 
             assert_eq!(board.fall_tick(true), Some(Msg::Updated));
+            assert!(board.no_overlap());
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 4 });
             assert_eq!(board.get_focused_index(), Some(i));
 
             assert_eq!(board.fall_tick(true), Some(Msg::BlocksSettled));
+            assert!(board.no_overlap());
             assert_eq!(board.blocks[i].position, BoardPosition { x: 2, y: 22 });
             assert_eq!(board.blocks[i + 1].position, BoardPosition { x: 7, y: 5 });
             assert_eq!(board.get_focused_index(), Some(i + 1));
